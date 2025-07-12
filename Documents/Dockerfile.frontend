@@ -1,0 +1,128 @@
+pipeline {
+    agent {
+        docker {
+            image 'kdilipkumar/jenkins-agent:v19'
+            args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
+
+    environment {
+        FLUTTER_HOME = "/opt/flutter"
+        PATH = "$FLUTTER_HOME/bin:$PATH"
+        DOCKER_IMAGE = "kdilipkumar/emoy_frontend:v${BUILD_NUMBER}"
+    }
+
+    stages {
+        stage('Cleanup') {
+            steps {
+                sh 'rm -rf eMoy_Pro_Front_End || true'
+            }
+        }
+
+        stage('Checkout Repository') {
+            steps {
+                sh '''
+                    echo "Cloning repository..."
+                    git clone https://github.com/Dilip-Devopos/eMoy_Pro_Front_End.git
+                '''
+            }
+        }
+
+        stage('Setup & Build Web') {
+            steps {
+                sh '''
+                    echo "Navigating to project directory..."
+                    cd eMoy_Pro_Front_End/eMoy_pro_Referral-UI || { echo "Failed to navigate to project directory"; exit 1; }
+                    echo "Setting Flutter directory..."
+                    git config --global --add safe.directory /opt/flutter
+                    echo "Checking Flutter environment..."
+                    flutter doctor || { echo "Flutter environment check failed"; exit 1; }
+                    echo "Cleaning dependencies..."
+                    flutter clean
+                    echo "Fetching dependencies..."
+                    flutter pub get || { echo "Failed to fetch dependencies"; exit 1; }
+                    echo "Building Flutter Web App in RELEASE mode..."
+                    flutter build web --dart-define=ENV=prod || { echo "Flutter web build failed"; exit 1; }
+
+                    echo "Flutter web build completed successfully!"
+                '''
+            }
+        }
+
+        stage('Archive Build Artifacts') {
+            steps {
+                archiveArtifacts artifacts: 'eMoy_Pro_Front_End/eMoy_pro_Referral-UI/build/web/**', fingerprint: true
+            }
+        }
+
+        stage('Download Latest Artifact and Verify') {
+            steps {
+                script {
+                    sh '''
+                        # Define source and destination paths
+                        cp -r eMoy_Pro_Front_End/eMoy_pro_Referral-UI/build/ /home/jenkins/download_artifact
+
+                        # List files to verify the copy operation
+                        ls /home/jenkins/download_artifact
+                    '''
+                }
+            }
+        }
+
+        stage('OWASP Dependency-Check Vulnerabilities') {
+            steps {
+                script {
+                    sh '''
+                        /opt/dependency-check/bin/dependency-check.sh \
+                        --project "Flutter-FrontEnd" \
+                        --scan /home/jenkins/download_artifact/build/** \
+                        --out dependency-check-reports \
+                        --format "XML"
+                    '''
+                    sh 'chown -R jenkins:jenkins dependency-check-reports'
+                    sh 'chmod 644 dependency-check-reports/*.xml'
+                    sh 'ls -la dependency-check-reports'
+                }
+                dependencyCheckPublisher pattern: 'dependency-check-reports/*.xml'
+            }
+        }
+
+        stage('Build Docker Image') {
+            environment {
+                DOCKERFILE_LOCATION = "eMoy_Pro_Front_End/eMoy_pro_Referral-UI/Dockerfile"
+            }
+            steps {
+                script {
+                    sh 'cd eMoy_Pro_Front_End/eMoy_pro_Referral-UI && docker build -t ${DOCKER_IMAGE} .'
+                }
+            }
+        }
+
+        stage('Security Scan with Trivy') {
+            steps {
+                script {
+                    sh '''
+                        echo "Running Trivy vulnerability scan..."
+                        trivy --version
+                        trivy image --severity HIGH,CRITICAL ${DOCKER_IMAGE}
+                    '''
+                }
+            }
+        }
+
+        stage('Push Docker Image') {
+            environment {
+                REGISTRY_CREDENTIALS = credentials('docker-cred')
+            }
+            steps {
+                script {
+                    def dockerImage = docker.image("${DOCKER_IMAGE}")
+                    docker.withRegistry('https://index.docker.io/v1/', "docker-cred") {
+                        dockerImage.push()
+                    }
+                }
+            }
+        }
+
+    }
+}

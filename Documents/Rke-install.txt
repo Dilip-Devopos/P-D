@@ -1,0 +1,76 @@
+edit inbound reuls open all ports or specific port
+install docker 
+install ssh-keygen and copy to all instance to ssh 
+ssh-keygen -t rsa -b 4096
+download the rke binary   https://github.com/rancher/rke/releases/download/v1.4.20/rke_linux-amd64 -> ubuntu ec2 instance
+chmod +x rke_linux-amd64
+./rke_linux-amd64  --version
+./rke_linux-amd64 config
+		[+] Cluster Level SSH Private Key Path [~/.ssh/id_rsa]:
+		[+] Number of Hosts [1]:
+		[+] SSH Address of host (1) [none]: 172.25.100.150 ---> Give current machine ip
+		[+] SSH Port of host (1) [22]:
+		[+] SSH Private Key Path of host (172.27.7.74) [none]:
+		[-] You have entered empty SSH key path, trying fetch from SSH key parameter
+		[+] SSH Private Key of host (172.27.7.74) [none]:
+		[-] You have entered empty SSH key, defaulting to cluster level SSH key: ~/.ssh/id_rsa
+		[+] SSH User of host (172.27.7.74) [ubuntu]: omkar   ---> Give correct user name
+		[+] Is host (172.27.7.74) a Control Plane host (y/n)? [y]: y ---> y
+		[+] Is host (172.27.7.74) a Worker host (y/n)? [n]: y ---> y
+		[+] Is host (172.27.7.74) an etcd host (y/n)? [n]: y ---> y
+		[+] Override Hostname of host (172.27.7.74) [none]:
+		[+] Internal IP of host (172.27.7.74) [none]: 
+		[+] Docker socket path on host (172.27.7.74) [/var/run/docker.sock]:
+		[+] Network Plugin Type (flannel, calico, weave, canal, aci) [canal]:
+		[+] Authentication Strategy [x509]:
+		[+] Authorization Mode (rbac, none) [rbac]:
+		[+] Kubernetes Docker image [rancher/hyperkube:v1.27.13-rancher1]:
+		[+] Cluster domain [cluster.local]:
+		[+] Service Cluster IP Range [10.43.0.0/16]:
+		[+] Enable PodSecurityPolicy [n]:
+		[+] Cluster Network CIDR [10.42.0.0/16]:
+		[+] Cluster DNS Service IP [10.43.0.10]:
+		[+] Add addon manifest URLs or YAML files [no]:
+./rke_linux-amd64 up
+mkdir /home/omkar/.kube
+cp kube_config_cluster.yml ~/.kube/config
+
+Rancher
+------------------------------------------------------------------
+install kubectl
+ 
+curl -LO "https://dl.k8s.io/release/v1.27.10/bin/linux/amd64/kubectl"
+chmod +x ./kubectl
+sudo mv ./kubectl /usr/local/bin/kubectl
+kubectl version --client
+
+1. Download- https://github.com/cert-manager/cert-manager/releases/download/v1.14.5/cert-manager.yaml
+2. Move the cert-manager.yaml file to /apps/installers
+3. ./kubectl apply -f cert-manager.yaml
+4. ./kubectl get pods --namespace cert-manager
+3 pods should be running	
+
+Download the helm repo
+
+curl https://baltocdn.com/helm/signing.asc | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg > /dev/null
+sudo apt-get install apt-transport-https --yes
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update
+sudo apt-get install helm
+
+kubectl create namespace cattle-system	
+
+Do all these in internet machine
+	1. helm repo add rancher-stable https://releases.rancher.com/server-charts/stable
+	2. helm install rancher rancher-stable/rancher --namespace cattle-system --set hostname=172.25.100.150.sslip.io --set bootstrapPassword=admin
+	Note - Give proper hostname	
+	3. ./helm fetch rancher-stable/rancher --version 2.8.4
+	Note - Step 2 is not required if we just downloading
+	4. Move the "rancher-2.8.4.tgz" to no internet machine
+	5. kubectl -n cattle-system  expose service rancher --name=rancher2 --type=NodePort
+	
+kubectl get secret --namespace cattle-system bootstrap-secret -o go-template='{{.data.bootstrapPassword|base64decode}}{{ "\n" }}'	
+	
+	
+		
+		

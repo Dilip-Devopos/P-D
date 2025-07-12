@@ -1,0 +1,59 @@
+kubeadm upgrade plan  => find the latest version of the kubeadm
+
+drain node:
+kubectl drain nodename --ingnore-daemonsets
+kubectl get pods
+
+naviget to the packages for kubernetes: k8 documentation and follow up
+
+Packages download:
+echo "deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.30/deb/ /" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.30/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+
+cat /etc/release
+sudo apt update
+sudo apt-cache madison kubeadm
+apt-get --version
+apt-get update $$ \ apt-get install -y --allow-change-held-packages kubeadm=1.30.5-1.1
+kubeadm version
+
+kubeadm upgrade plan
+
+kubeadm upgrade apply v1.20.0
+
+sudo apt-mark unhold kubelet kubectl && \
+sudo apt-get update && sudo apt-get install -y kubelet='1.30.x-*' kubectl='1.30.x-*' && \
+sudo apt-mark hold kubelet kubectl
+
+systemctl daemon-reload
+
+systemctl restart kubelet
+
+kubectl get nodes
+
+kubectl uncordon controlplane
+
+#################################################################################################################################################
+node upgrade kubeadm
+
+drain node:
+kubectl drain nodename --ingnore-daemonsets
+kubectl get pods
+apt-get update $$ \ apt-get install -y --allow-change-held-packages kubeadm=1.30.5-1.1
+sudo kubeadm upgrade node
+sudo apt-mark unhold kubelet kubectl && \
+sudo apt-get update && sudo apt-get install -y kubelet='1.30.x-*' kubectl='1.30.x-*' && \
+sudo apt-mark hold kubelet kubectl
+systemctl daemon-reload
+systemctl restart kubelet
+kubectl get nodes
+kubectl uncordon controlplane
+
+################################################################################################################################################
+
+ETCDCTL_API=3 etcdctl --endpoints=https://[127.0.0.1]:2379 \
+--cacert=/etc/kubernetes/pki/etcd/ca.crt \
+--cert=/etc/kubernetes/pki/etcd/server.crt \
+--key=/etc/kubernetes/pki/etcd/server.key \
+snapshot save /opt/snapshot-pre-boot.db
